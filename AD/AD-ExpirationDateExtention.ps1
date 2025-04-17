@@ -29,7 +29,7 @@
 .NOTES
     Author: Thomas Bonnet
     Version: 1.0
-    Date: 2025-04-17
+    Date: 17-12-2024
 
 .EXAMPLE
     # Launch the script manually
