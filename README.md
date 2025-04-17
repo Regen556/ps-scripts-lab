@@ -32,7 +32,7 @@ If you find a bug or want to suggest improvements, feel free to open an issue or
 
 ## 📜 License
 
-MIT License (or specify yours here)
+MIT License
 
 ---
 
