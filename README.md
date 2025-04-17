@@ -14,9 +14,9 @@ I'm sharing them to document my journey and maybe help others along the way 🚀
 
 - 🗂️ **Active Directory** — user management, password expiration, account updates  
 - 🖥️ **System Maintenance** — cleanup tools, temp file removals, etc.  
-- 🌐 **Network & Connectivity** — TCP port checks, quick network diagnostics  
 - 📦 **Application Deployment** — example scripts like installing Teams  
 - 🧪 **Training / Challenges** — scripts written for learning or exercises
+- 🛠️ **PowerShell blocs** - small PowerShell functions or blocs to integrate to your script
 
 ## 🛠️ Usage
 
