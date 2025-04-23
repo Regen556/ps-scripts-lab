@@ -11,8 +11,8 @@
     The file types to filter by. Default is "All files (*.*)|*.*".
     Example: "CSV files (*.csv)|*.csv|Text files (*.txt)|*.txt"
 .PARAMETER InitialDirectory
-    The starting directory for the file browser. If not specified,
-    it will use the last directory or default to the user's Documents folder.
+    The starting directory for the file browser. 
+    It will use the last directory or default to the user's Documents folder if not specified.
 .PARAMETER SaveLastDirectory
     If set to $true, saves the last directory browsed for future use.
 .RETURNS
@@ -34,19 +34,37 @@
 function Select-FileDialog {
     [CmdletBinding()]
     param (
-        [Parameter(Mandatory=$false)]
+        [Parameter(Mandatory = $false)]
         [string]$Title = "Select a file",
         
-        [Parameter(Mandatory=$false)]
+        [Parameter(Mandatory = $false)]
         [string]$FileTypes = "All files (*.*)|*.*",
         
-        [Parameter(Mandatory=$false)]
+        [Parameter(Mandatory = $false)]
         [string]$InitialDirectory = $null,
         
-        [Parameter(Mandatory=$false)]
+        [Parameter(Mandatory = $false)]
         [bool]$SaveLastDirectory = $true
     )
 
-    # Function logic would be implemented here
-    # It would return the selected file path or $null if canceled
+    Add-Type -AssemblyName System.Windows.Forms
+
+    $dialog = New-Object System.Windows.Forms.OpenFileDialog
+    $dialog.Title = $Title
+    $dialog.Filter = $FileTypes
+
+    if ($InitialDirectory) {
+        $dialog.InitialDirectory = $InitialDirectory
+    }
+
+    # Show dialog and return result
+    if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
+        if ($SaveLastDirectory) {
+            Set-Location -Path (Split-Path $dialog.FileName)
+        }
+        return $dialog.FileName
+    } else {
+        return $null
+    }
 }
+
