@@ -48,23 +48,38 @@ function Select-FileDialog {
     )
 
     Add-Type -AssemblyName System.Windows.Forms
-
-    $dialog = New-Object System.Windows.Forms.OpenFileDialog
-    $dialog.Title = $Title
-    $dialog.Filter = $FileTypes
-
+    
+    # Create and configure OpenFileDialog
+    $openFileDialog = New-Object System.Windows.Forms.OpenFileDialog
+    $openFileDialog.Title = $Title
+    $openFileDialog.Filter = $FileTypes
+    
+    # Set initial directory if provided, otherwise use last directory if enabled
     if ($InitialDirectory) {
-        $dialog.InitialDirectory = $InitialDirectory
+        $openFileDialog.InitialDirectory = $InitialDirectory
     }
-
-    # Show dialog and return result
-    if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
+    elseif ($SaveLastDirectory -and (Test-Path variable:global:LastFileDialogDirectory) -and (Test-Path $global:LastFileDialogDirectory)) {
+        $openFileDialog.InitialDirectory = $global:LastFileDialogDirectory
+    }
+    else {
+        $openFileDialog.InitialDirectory = [Environment]::GetFolderPath('Desktop')
+    }
+    
+    # Show dialog and get result
+    $result = $openFileDialog.ShowDialog()
+    
+    # Return selected file if OK
+    if ($result -eq [System.Windows.Forms.DialogResult]::OK) {
+        # Save directory for future use if enabled
         if ($SaveLastDirectory) {
-            Set-Location -Path (Split-Path $dialog.FileName)
+            $global:LastFileDialogDirectory = [System.IO.Path]::GetDirectoryName($openFileDialog.FileName)
         }
-        return $dialog.FileName
-    } else {
-        return $null
+        
+        # Return the selected file path
+        return $openFileDialog.FileName
     }
+    
+    # Return null if canceled
+    return $null
 }
 
