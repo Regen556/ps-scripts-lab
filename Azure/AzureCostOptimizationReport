@@ -1,0 +1,106 @@
+<#
+.SYNOPSIS
+    Azure Cost Optimization Report Generator
+
+.DESCRIPTION
+    This script generates a report of cost optimization recommendations 
+    from Azure Advisor. It checks for unused or underutilized resources across all 
+    accessible Azure subscriptions and exports the findings to a CSV file.
+
+.NOTES
+    File Name     : AzureCostOptimizationReport.ps1
+    Author        : Thomas Bonnet
+    Prerequisite  : Az.Advisor and Az.ResourceGraph PowerShell modules
+    Version       : 1.0
+
+.EXAMPLE
+    .\AzureCostOptimizationReport.ps1
+    Runs the script with default settings, exporting results to C:\Reports\AZResourcesReport.csv
+
+.LINK
+    https://learn.microsoft.com/en-us/azure/advisor/advisor-cost-recommendations
+#>
+
+# Define the path to the CSV report file
+$csvFilePath = "C:\Reports\AZResourcesReport.csv"
+$folderDirectory = [System.IO.Path]::GetDirectoryName($csvFilePath)
+if (-not (Test-Path -Path $folderDirectory)) {
+    New-Item -ItemType Directory -Path $folderDirectory
+}
+
+
+#Verify if Azure Resource Graph & Azure Advisor PS Modules are installed
+
+try {
+    Import-Module -Name Az.Advisor -ErrorAction Stop
+    Import-Module -Name Az.ResourceGraph -ErrorAction Stop
+    Write-Host "Required modules are already installed" -ForegroundColor Green
+} 
+catch {
+    Write-Host "Some required modules not found. Installing..." -ForegroundColor Yellow
+    try {
+        Install-Module -Name Az.Advisor -Force
+        Install-Module -Name Az.ResourceGraph -Force
+        Write-Host "Required modules successfully installed" -ForegroundColor Green
+    }
+    catch {
+        Write-Error "Failed to install required modules: $_"
+        exit 1
+    }
+}
+
+# Check if the user is logged in to Azure
+
+if (-not (Get-AzContext)) {
+    Write-Host "You are not logged in to Azure."
+    Connect-AzAccount
+    $user_az_account = (Get-AzADUser -SignedIn).DisplayName
+    Write-Host "You are now logging under $user_az_account"
+} else {
+    $user_az_account =  (Get-AzADUser -SignedIn).DisplayName
+    Write-Host "You are already logging under $user_az_account"
+    do {
+        $az_prompt = Read-Host -Prompt "Do you want to switch to another account?(Yes/No)"
+        
+        # Loop until break with a "yes" or a "no"
+        if ($az_prompt -eq "yes" -or $az_prompt -eq "no") {
+            break
+        } else {
+            Write-Host "Invalid response, please try again" -ForegroundColor Red
+        }
+    } until ($false)
+    
+    if ($az_prompt -eq "yes") {
+        Write-Host "Switching account...."
+        Connect-AzAccount
+        $user_az_account = (Get-AzADUser -SignedIn).DisplayName
+        Write-Host "You are now logging under $user_az_account"
+    } else {
+
+        Write-Host "Continuing with $user_az_account"
+    }
+    
+}
+
+# Get Azure Advisor Cost recommendations using Resource Graph
+try {
+    $costRecommendations = Search-AzGraph -Query "advisorresources | where type == 'microsoft.advisor/recommendations' | where properties.category == 'Cost' | project id, name, resourceId=properties.resourceMetadata.resourceId, solution=properties.shortDescription.solution"
+    
+    if ($costRecommendations.Count -eq 0) {
+        Write-Host "No cost optimization recommendations found." -ForegroundColor Yellow
+    } else {
+        Write-Host "Found $($costRecommendations.Count) cost optimization recommendations." -ForegroundColor Green
+        
+        # Export to CSV
+        $costRecommendations | Export-Csv -Path $csvFilePath -NoTypeInformation
+        Write-Host "Report exported to $csvFilePath" -ForegroundColor Green
+        
+        # Display summary of findings
+        Write-Host "`nSummary of recommendations:" -ForegroundColor Cyan
+        $costRecommendations | Group-Object -Property solution | 
+            Select-Object Name, Count | 
+            Format-Table -AutoSize
+    }
+} catch {
+    Write-Error "Error retrieving Azure Advisor recommendations: $_"
+}
