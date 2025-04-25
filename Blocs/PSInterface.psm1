@@ -18,7 +18,7 @@
 .RETURNS
     The full path to the selected file, or $null if canceled.
 .NOTES
-    Author: Thomas "Regen" Bonnet
+    Author: Thomas Bonnet
     Version: 1.0
     Date: 03-02-2025
 .EXAMPLE
@@ -82,4 +82,3 @@ function Select-FileDialog {
     # Return null if canceled
     return $null
 }
-
