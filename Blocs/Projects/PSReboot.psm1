@@ -26,7 +26,7 @@
 
 .NOTES
     Author: Thomas Bonnet
-    Version: 1.1
+    Version: 0.5
     Date: 2025-04-18
 .EXAMPLE
     # Simple usage without prior configuration
