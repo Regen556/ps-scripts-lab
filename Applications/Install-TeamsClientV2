@@ -1,0 +1,141 @@
+<#
+.SYNOPSIS
+    Automation script for Microsoft Teams installation/reinstallation.
+
+.DESCRIPTION
+    This script automates the download and installation of Microsoft Teams.
+    It first checks if Teams is already installed, verifies download URLs availability,
+    downloads the necessary files, uninstalls the previous version if present,
+    installs the new version, and verifies the success of the installation.
+
+.NOTES
+    Name        : Install-MicrosoftTeams.ps1
+    Author      : Thomas Bonnet
+    Date        : 2024-09-18
+    Version     : 1.0
+    
+.EXAMPLE
+    .\Install-MicrosoftTeams.ps1
+#>
+
+#Variables
+$folderPath = "C:\Temp\MSTeams"
+if (-not (Test-Path -Path $folderPath)){
+    New-Item -ItemType Directory -Path $folderPath
+}
+$url1 = "https://go.microsoft.com/fwlink/?linkid=2243204&clcid=0x409"
+$url2 = "https://go.microsoft.com/fwlink/?linkid=2196106"
+$msix = "MSTeams-x64.msix"
+$teamsBootstrapper = "teamsbootstrapper.exe"
+$outfile1 = Join-Path $folderPath $teamsBootstrapper
+$outfile2 = Join-Path $folderPath $msix
+
+# Point 1: Check if Teams is already installed
+$teamsPath = "$env:LOCALAPPDATA\Microsoft\Teams"
+$teamsUpdateExe = "$teamsPath\Update.exe"
+$newTeamsPath = "$env:LOCALAPPDATA\Packages\MSTeams_8wekyb3d8bbwe"
+
+if ((Test-Path -Path $newTeamsPath) -or ((Test-Path -Path $teamsUpdateExe) -and (Get-Process -Name "Teams" -ErrorAction SilentlyContinue))) {
+    Write-Output "Microsoft Teams is already installed."
+    $confirmation = Read-Host "Do you still want to continue with reinstallation? (Y/N)"
+    if ($confirmation -ne "Y") {
+        Write-Output "Operation cancelled."
+        exit
+    }
+}
+
+# Point 5: Check URL availability before downloading
+function Test-UrlAvailability {
+    param (
+        [string]$Url
+    )
+    try {
+        $request = [System.Net.WebRequest]::Create($Url)
+        $request.Method = "HEAD"
+        $request.Timeout = 5000
+        $response = $request.GetResponse()
+        $response.Close()
+        return $true
+    }
+    catch {
+        Write-Error "URL $Url is not accessible: $_"
+        return $false
+    }
+}
+
+# Check both URLs
+$url1Available = Test-UrlAvailability -Url $url1
+$url2Available = Test-UrlAvailability -Url $url2
+
+if (-not ($url1Available -and $url2Available)) {
+    Write-Error "Download not possible, one or more URLs are not available."
+    exit 1
+}
+
+# Invoke web requests
+try {
+    Write-Output "Downloading Teams Bootstrapper..."
+    Invoke-WebRequest -Uri $url1 -OutFile $outfile1
+    Write-Output "File downloaded successfully to $outFile1"
+} catch {
+    Write-Error "An error occurred while downloading the Teams Bootstrapper: $_"
+    exit 1
+}
+
+try {
+    Write-Output "Downloading Teams MSIX package..."
+    Invoke-WebRequest -Uri $url2 -OutFile $outfile2
+    Write-Output "File downloaded successfully to $outFile2"
+} catch {
+    Write-Error "An error occurred while downloading the MSIX file: $_"
+    exit 1
+}
+
+# Remove Teams
+try {
+    Write-Output "Uninstalling Teams in progress..."
+    $uninstallProcess = Start-Process -FilePath $outFile1 -ArgumentList "-x" -PassThru
+    
+    # Point 3: Wait for process completion
+    $uninstallProcess | Wait-Process -Timeout 120 -ErrorAction SilentlyContinue
+    if (-not $?) {
+        Write-Warning "Uninstallation is taking longer than expected but continues in the background."
+    }
+    
+    Write-Output "Teams uninstallation completed."
+} catch {
+    Write-Error "An error occurred during Teams uninstallation: $_"
+}
+
+# Wait a few seconds to ensure uninstallation is properly completed
+Start-Sleep -Seconds 5
+
+# Install Teams
+try {
+    Write-Output "Installing Teams in progress..."
+    $installProcess = Start-Process -FilePath $outFile1 -ArgumentList "-p", "-o `"$outfile2`"" -PassThru
+    
+    # Point 3: Wait for process completion
+    $installProcess | Wait-Process -Timeout 180 -ErrorAction SilentlyContinue
+    if (-not $?) {
+        Write-Warning "Installation is taking longer than expected but continues in the background."
+    }
+    
+    Write-Output "Teams installation completed."
+} catch {
+    Write-Error "An error occurred during Teams installation: $_"
+}
+
+# Point 2: Verify installation success
+Start-Sleep -Seconds 5  # Wait a bit for files to be properly created
+
+if (Test-Path -Path $newTeamsPath) {
+    Write-Output "Verification: Microsoft Teams has been successfully installed."
+} else {
+    Write-Warning "Verification: Microsoft Teams does not appear to have been installed correctly."
+    Write-Output "Check the installation manually or launch Teams to complete the setup."
+}
+
+# Cleanup
+Remove-Item -Path $folderPath -Recurse -Force -ErrorAction SilentlyContinue
+Write-Output "Temporary files cleanup completed."
