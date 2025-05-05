@@ -34,51 +34,65 @@
 function Select-FileDialog {
     [CmdletBinding()]
     param (
-        [Parameter(Mandatory = $false)]
-        [string]$Title = "Select a file",
+        [ValidateSet('OpenFile','SaveFile','Folder')]
+        [string] $Mode = 'OpenFile',
+
+        [string] $Title = 'Select a path',
         
-        [Parameter(Mandatory = $false)]
-        [string]$FileTypes = "All files (*.*)|*.*",
-        
-        [Parameter(Mandatory = $false)]
-        [string]$InitialDirectory = $null,
-        
-        [Parameter(Mandatory = $false)]
-        [bool]$SaveLastDirectory = $true
+        # Only used by the two file dialogs
+        [string] $Filter = 'All files (*.*)|*.*',
+
+        [string] $InitialDirectory = $null,
+
+        [switch] $SaveLastDirectory
     )
 
-    Add-Type -AssemblyName System.Windows.Forms
-    
-    # Create and configure OpenFileDialog
-    $openFileDialog = New-Object System.Windows.Forms.OpenFileDialog
-    $openFileDialog.Title = $Title
-    $openFileDialog.Filter = $FileTypes
-    
-    # Set initial directory if provided, otherwise use last directory if enabled
-    if ($InitialDirectory) {
-        $openFileDialog.InitialDirectory = $InitialDirectory
+    # Load WinForms once per session
+    if (-not ([System.Windows.Forms.Application]::MessageLoop)) {
+        Add-Type -AssemblyName System.Windows.Forms
     }
-    elseif ($SaveLastDirectory -and (Test-Path variable:global:LastFileDialogDirectory) -and (Test-Path $global:LastFileDialogDirectory)) {
-        $openFileDialog.InitialDirectory = $global:LastFileDialogDirectory
+
+    # --- create the right dialog ------------------------------------------------
+    switch ($Mode) {
+        'OpenFile' { $dlg = New-Object System.Windows.Forms.OpenFileDialog  }
+        'SaveFile' { $dlg = New-Object System.Windows.Forms.SaveFileDialog  }
+        'Folder'   { $dlg = New-Object System.Windows.Forms.FolderBrowserDialog }
     }
-    else {
-        $openFileDialog.InitialDirectory = [Environment]::GetFolderPath('Desktop')
-    }
-    
-    # Show dialog and get result
-    $result = $openFileDialog.ShowDialog()
-    
-    # Return selected file if OK
-    if ($result -eq [System.Windows.Forms.DialogResult]::OK) {
-        # Save directory for future use if enabled
-        if ($SaveLastDirectory) {
-            $global:LastFileDialogDirectory = [System.IO.Path]::GetDirectoryName($openFileDialog.FileName)
+
+    $dlg.Title = $Title
+
+    if ($dlg -is [System.Windows.Forms.FileDialog]) {    # the two file pickers
+        $dlg.Filter = $Filter
+        if ($InitialDirectory) {
+            $dlg.InitialDirectory = $InitialDirectory
+        } elseif ($SaveLastDirectory -and $global:LastDialogDir -and (Test-Path $global:LastDialogDir)) {
+            $dlg.InitialDirectory = $global:LastDialogDir
+        } else {
+            $dlg.InitialDirectory = [Environment]::GetFolderPath('Desktop')
         }
-        
-        # Return the selected file path
-        return $openFileDialog.FileName
+    } elseif ($dlg -is [System.Windows.Forms.FolderBrowserDialog]) { # folder picker
+        if ($InitialDirectory) { $dlg.SelectedPath = $InitialDirectory }
+        elseif ($SaveLastDirectory -and $global:LastDialogDir -and (Test-Path $global:LastDialogDir)) {
+            $dlg.SelectedPath = $global:LastDialogDir
+        }
     }
-    
-    # Return null if canceled
-    return $null
+
+    # --- show the dialog --------------------------------------------------------
+    $result = $dlg.ShowDialog()
+
+    if ($result -eq [System.Windows.Forms.DialogResult]::OK) {
+        # Get the chosen path & remember its directory (for next time, if wanted)
+        switch ($Mode) {
+            'OpenFile' { $path = $dlg.FileName }
+            'SaveFile' { $path = $dlg.FileName }
+            'Folder'   { $path = $dlg.SelectedPath }
+        }
+        if ($SaveLastDirectory) {
+            $global:LastDialogDir = if ($Mode -eq 'Folder') { $path }
+                                     else { [System.IO.Path]::GetDirectoryName($path) }
+        }
+        return $path
+    }
+
+    return $null  # user cancelled
 }
